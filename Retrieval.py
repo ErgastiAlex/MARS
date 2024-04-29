@@ -16,11 +16,12 @@ import utils
 from dataset import create_dataset, create_sampler, create_loader
 from models.model_person_search import ALBEF
 from models.tokenization_bert import BertTokenizer
+from transformers import T5Tokenizer
 from models.vit import interpolate_pos_embed
 from optim import create_optimizer
 from scheduler import create_scheduler
 
-def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config):
+def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config, tokenizer_t5):
     # train
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -30,6 +31,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
     metric_logger.add_meter('loss_mlm', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     metric_logger.add_meter('loss_prd', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     metric_logger.add_meter('loss_mrtd', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
+    metric_logger.add_meter('loss_mae', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     header = 'Train Epoch: [{}]'.format(epoch)
     print_freq = 50
     step_size = 100
@@ -40,16 +42,19 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         image2 = image2.to(device, non_blocking=True)
         idx = idx.to(device, non_blocking=True)
         replace = replace.to(device, non_blocking=True)
-        text_input1 = tokenizer(text1, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
-        text_input2 = tokenizer(text2, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input1 = tokenizer(text1, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input2 = tokenizer(text2, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input1_t5 = tokenizer_t5(text1, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input2_t5 = tokenizer_t5(text2, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
+
         if epoch > 0 or not config['warm_up']:
             alpha = config['alpha']
         else:
             alpha = config['alpha'] * min(1.0, i / len(data_loader))
-        loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd = model(image1, image2, text_input1, text_input2,
+        loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae = model(image1, image2, text_input1, text_input2, text_input1_t5, text_input2_t5,
                                                                   alpha=alpha, idx=idx, replace=replace)
         loss = 0.
-        for j, los in enumerate((loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd)):
+        for j, los in enumerate((loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae)):
             loss += config['weights'][j] * los
         optimizer.zero_grad()
         loss.backward()
@@ -59,6 +64,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         metric_logger.update(loss_mlm=loss_mlm.item())
         metric_logger.update(loss_prd=loss_prd.item())
         metric_logger.update(loss_mrtd=loss_mrtd.item())
+        metric_logger.update(loss_mae=loss_mae.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         if epoch == 0 and i % step_size == 0 and i <= warmup_iterations:
             scheduler.step(i // step_size)
@@ -68,7 +74,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
     return {k: "{:.3f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}
 
 @torch.no_grad()
-def evaluation(model, data_loader, tokenizer, device, config):
+def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
     # evaluate
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -85,12 +91,17 @@ def evaluation(model, data_loader, tokenizer, device, config):
     for i in range(0, num_text, text_bs):
         text = texts[i: min(num_text, i + text_bs)]
         text_input = tokenizer(text, padding='max_length', truncation=True, max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input_t5 = tokenizer_t5(text, padding='max_length', truncation=True, max_length=config['max_words'], return_tensors="pt").to(device)
         text_output = model.text_encoder.bert(text_input.input_ids, attention_mask=text_input.attention_mask, mode='text')
+        text_output_t5 = model.t5.encoder(input_ids=text_input_t5.input_ids).last_hidden_state
+        text_output_t5 = model.t5_proj(text_output_t5)
+
         text_feat = text_output.last_hidden_state
+        text_feat = torch.cat([text_feat,text_output_t5], dim=1)
         text_embed = F.normalize(model.text_proj(text_feat[:, 0, :]))
         text_embeds.append(text_embed)
         text_feats.append(text_feat)
-        text_atts.append(text_input.attention_mask)
+        text_atts.append(torch.cat([text_input.attention_mask, text_input_t5.attention_mask], dim=1))
     text_embeds = torch.cat(text_embeds, dim=0)
     text_feats = torch.cat(text_feats, dim=0)
     text_atts = torch.cat(text_atts, dim=0)
@@ -117,8 +128,9 @@ def evaluation(model, data_loader, tokenizer, device, config):
     end = min(sims_matrix.size(0), start + step)
     for i, sims in enumerate(metric_logger.log_every(sims_matrix[start:end], 50, header)):
         topk_sim, topk_idx = sims.topk(k=config['k_test'], dim=0)
-        encoder_output = image_feats[topk_idx]
+        encoder_output = image_feats[topk_idx.cpu()]
         encoder_att = torch.ones(encoder_output.size()[:-1], dtype=torch.long).to(device)
+
         output = model.text_encoder.bert(encoder_embeds=text_feats[start + i].repeat(config['k_test'], 1, 1),
                                          attention_mask=text_atts[start + i].repeat(config['k_test'], 1),
                                          encoder_hidden_states=encoder_output.to(device),
@@ -205,7 +217,10 @@ def main(args, config):
                                                           num_workers=[4, 4, 4],
                                                           is_trains=[True, False, False],
                                                           collate_fns=[None, None, None])
+    print(args.text_encoder)
     tokenizer = BertTokenizer.from_pretrained(args.text_encoder)
+    tokenizer_t5 = T5Tokenizer.from_pretrained("google-t5/t5-small")
+
 
     start_epoch = 0
     max_epoch = config['schedular']['epochs']
@@ -228,7 +243,7 @@ def main(args, config):
         checkpoint = torch.load(args.checkpoint, map_location='cpu')
         state_dict = checkpoint['model']
         if args.resume:
-            optimizer.load_state_dict(checkpoint['optimizer'])
+            optimizer.load_state_dict(checkpoint['optimizer'], strict=False)
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             start_epoch = checkpoint['epoch'] + 1
             best = checkpoint['best']
@@ -246,7 +261,7 @@ def main(args, config):
 
     model_without_ddp = model
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
         model_without_ddp = model.module
 
     print("Start training")
@@ -258,9 +273,9 @@ def main(args, config):
             if args.distributed:
                 train_loader.sampler.set_epoch(epoch)
             train_stats = train(model, train_loader, optimizer, tokenizer, epoch, warmup_steps, device, lr_scheduler,
-                                config)
+                                config, tokenizer_t5)
         if epoch >= config['eval_epoch'] or args.evaluate:
-            score_test_t2i = evaluation(model_without_ddp, test_loader, tokenizer, device, config)
+            score_test_t2i = evaluation(model_without_ddp, test_loader, tokenizer, tokenizer_t5, device, config)
             if utils.is_main_process():
                 test_result = itm_eval(score_test_t2i, test_dataset.img2person, test_dataset.txt2person, args.eval_mAP)
                 print('Test:', test_result, '\n')
