@@ -85,13 +85,21 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
     texts = data_loader.dataset.text
     num_text = len(texts)
     text_bs = 256
+    
+    text_inputs_ids = [] # new version
+    text_atts_new_version = []
     text_feats = []
     text_embeds = []
     text_atts = []
+    
     for i in range(0, num_text, text_bs):
         text = texts[i: min(num_text, i + text_bs)]
         text_input = tokenizer(text, padding='max_length', truncation=True, max_length=config['max_words'], return_tensors="pt").to(device)
         text_input_t5 = tokenizer_t5(text, padding='max_length', truncation=True, max_length=config['max_words'], return_tensors="pt").to(device)
+
+        text_inputs_ids.append(text_input.input_ids) # new version
+        text_atts_new_version.append(text_input.attention_mask) 
+
         text_output = model.text_encoder.bert(text_input.input_ids, attention_mask=text_input.attention_mask, mode='text')
         text_output_t5 = model.t5.encoder(input_ids=text_input_t5.input_ids).last_hidden_state
         text_output_t5 = model.t5_proj(text_output_t5)
@@ -102,9 +110,14 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
         text_embeds.append(text_embed)
         text_feats.append(text_feat)
         text_atts.append(torch.cat([text_input.attention_mask, text_input_t5.attention_mask], dim=1))
+
     text_embeds = torch.cat(text_embeds, dim=0)
     text_feats = torch.cat(text_feats, dim=0)
     text_atts = torch.cat(text_atts, dim=0)
+
+    text_inputs_ids = torch.cat(text_inputs_ids, dim=0) # new version
+    text_atts_new_version = torch.cat(text_atts_new_version, dim=0) # new version
+
     # extract image features
     image_feats = []
     image_embeds = []
@@ -131,12 +144,19 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
         encoder_output = image_feats[topk_idx.cpu()]
         encoder_att = torch.ones(encoder_output.size()[:-1], dtype=torch.long).to(device)
 
-        output = model.text_encoder.bert(encoder_embeds=text_feats[start + i].repeat(config['k_test'], 1, 1),
-                                         attention_mask=text_atts[start + i].repeat(config['k_test'], 1),
+        # output = model.text_encoder.bert(encoder_embeds=text_feats[start + i].repeat(config['k_test'], 1, 1),
+        #                                  attention_mask=text_atts[start + i].repeat(config['k_test'], 1),
+        #                                  encoder_hidden_states=encoder_output.to(device),
+        #                                  encoder_attention_mask=encoder_att,
+        #                                  return_dict=True,
+        #                                  mode='fusion'
+        #                                  )
+        output = model.text_encoder.bert(text_inputs_ids[start + i].repeat(config['k_test'], 1),
+                                         attention_mask=text_atts_new_version[start + i].repeat(config['k_test'], 1),
                                          encoder_hidden_states=encoder_output.to(device),
                                          encoder_attention_mask=encoder_att,
                                          return_dict=True,
-                                         mode='fusion'
+                                         mode='multi_modal'
                                          )
         score = model.itm_head(output.last_hidden_state[:, 0, :])[:, 1]
         score_matrix_t2i[start + i, topk_idx] = score
@@ -243,7 +263,7 @@ def main(args, config):
         checkpoint = torch.load(args.checkpoint, map_location='cpu')
         state_dict = checkpoint['model']
         if args.resume:
-            optimizer.load_state_dict(checkpoint['optimizer'], strict=False)
+            optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             start_epoch = checkpoint['epoch'] + 1
             best = checkpoint['best']

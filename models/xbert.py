@@ -446,7 +446,8 @@ class BertLayer(nn.Module):
         self.seq_len_dim = 1
         self.attention = BertAttention(config)
 
-        self.has_cross_attention = (layer_num >= config.fusion_layer)
+        # Every layer has CA
+        self.has_cross_attention = (layer_num >= config.fusion_layer) or True
         if self.has_cross_attention:           
             self.layer_num = layer_num                
             self.crossattention = BertAttention(config, is_cross_attention=True)
@@ -477,7 +478,8 @@ class BertLayer(nn.Module):
         outputs = self_attention_outputs[1:-1]
         present_key_value = self_attention_outputs[-1]
 
-        if self.has_cross_attention:
+        # cross-attention only if context is provided
+        if self.has_cross_attention and encoder_hidden_states is not None:
             assert encoder_hidden_states is not None, "encoder_hidden_states must be given for cross-attention layers"
             
             if type(encoder_hidden_states) == list:
