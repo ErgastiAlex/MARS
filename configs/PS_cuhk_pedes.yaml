@@ -29,11 +29,11 @@ optimizer: {opt: adamW, lr: 1e-5, weight_decay: 0.02, lr_custm: 1e-4}
 schedular: {sched: cosine, lr: 1e-5, epochs: 30, min_lr: 1e-6, decay_rate: 1, warmup_lr: 1e-5, warmup_epochs: 1, cooldown_epochs: 0}
 
 eval_epoch: 0
-
+mask_ratio: 0.75
 weights:
   - 0.5
   - 1
   - 1
   - 0.5
   - 0.5
-  - 1
+  - 0
