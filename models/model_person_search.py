@@ -69,6 +69,8 @@ class ALBEF(nn.Module):
         self.image_queue = nn.functional.normalize(self.image_queue, dim=0)
         self.text_queue = nn.functional.normalize(self.text_queue, dim=0)
 
+        self.mask_ratio = config["mask_ratio"]
+
     def forward(self, image1, image2, text1, text2, text1_t5, text2_t5, alpha, idx, replace):
         # extract image features
         image_embeds = self.visual_encoder(image1)
@@ -252,8 +254,7 @@ class ALBEF(nn.Module):
         loss_mrtd = F.cross_entropy(mrtd_output, mrtd_labels.view(-1))
 
         # mae loss
-        mask_ratio=0.75
-        x, mask, ids_restore = self.visual_encoder(image1, mask_ratio=mask_ratio)
+        x, mask, ids_restore = self.visual_encoder(image1, mask_ratio=self.mask_ratio)
 
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
         x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
