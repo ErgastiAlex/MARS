@@ -11,6 +11,7 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.nn.functional as F
 from pathlib import Path
+import spacy
 
 import utils
 from dataset import create_dataset, create_sampler, create_loader
@@ -21,6 +22,7 @@ from optim import create_optimizer
 from scheduler import create_scheduler
 
 def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config):
+    nlp = spacy.load('en_core_web_sm')
     # train
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -40,8 +42,48 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         image2 = image2.to(device, non_blocking=True)
         idx = idx.to(device, non_blocking=True)
         replace = replace.to(device, non_blocking=True)
+
         text_input1 = tokenizer(text1, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
         text_input2 = tokenizer(text2, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
+
+        attribute_masks=[]
+        for text in text2:
+            doc = nlp(text)
+            attribute_mask = torch.zeros(text_input2.input_ids.size(1))
+
+            text_words=text.split()
+            idx_words=0
+            char_count=0
+
+            count=1
+            for chunk in doc.noun_chunks:
+                # adj = []
+                # noun = ""
+                pos=[]
+                adj_founded=False # just to be sure
+                for tok in chunk:
+                    if tok.pos_ == "NOUN":
+                        # noun = tok.text
+                        #manage she's to be split in she is
+                        while (char_count<=tok.idx and tok.idx<=char_count+len(text_words[idx_words]))==False:
+                            char_count+=len(text_words[idx_words])+1
+                            idx_words+=1
+                        pos.append(idx_words+1) # +1 to account for [CLS]
+                    if tok.pos_ == "ADJ":
+                        adj_founded=True
+                        while (char_count<=tok.idx and tok.idx<=char_count+len(text_words[idx_words]))==False:
+                            char_count+=len(text_words[idx_words])+1
+                            idx_words+=1
+                        pos.append(idx_words+1) # +1 to account for [CLS]
+                        
+                if len(pos)>1 and adj_founded:
+                    attribute_mask[pos]=count
+                    count+=1
+            attribute_masks.append(attribute_mask)
+
+        attribute_masks=torch.stack(attribute_masks)
+        text_input2.attribute_masks=attribute_masks.to(device)
+
         if epoch > 0 or not config['warm_up']:
             alpha = config['alpha']
         else:

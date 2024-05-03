@@ -52,6 +52,7 @@ class ALBEF(nn.Module):
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
         self.image_queue = nn.functional.normalize(self.image_queue, dim=0)
         self.text_queue = nn.functional.normalize(self.text_queue, dim=0)
+        
 
     def forward(self, image1, image2, text1, text2, alpha, idx, replace):
         # extract image features
@@ -126,6 +127,7 @@ class ALBEF(nn.Module):
         text_neg_idx = torch.multinomial(weights_i2t, 1).flatten()
         text_embeds_neg = text_embeds[text_neg_idx]
         text_atts_neg = text2.attention_mask[text_neg_idx]
+        text_attribute_masks_neg=text2.attribute_masks[text_neg_idx]
         # forward the negative image-text pairs
         text_embeds_all = torch.cat([text_embeds, text_embeds_neg], dim=0)
         text_atts_all = torch.cat([text2.attention_mask, text_atts_neg], dim=0)
@@ -144,6 +146,37 @@ class ALBEF(nn.Module):
         itm_labels = torch.cat([torch.ones(bs, dtype=torch.long), torch.zeros(2 * bs, dtype=torch.long)],
                                dim=0).to(image1.device)
         loss_pitm = F.cross_entropy(vl_output, itm_labels)
+
+        # P-itm with attribute
+        averaged_attribute=[]
+        labels=[]
+
+        for attribute_mask,text_emb in zip(text2.attribute_masks, text_embeds):
+            max_attribute_value=torch.max(attribute_mask).to(torch.int32)
+
+            for i in range(1,max_attribute_value+1):
+                mask=attribute_mask==i
+
+                averaged_attribute.append(text_emb[mask].mean(0))
+                labels.append(torch.ones(1, dtype=torch.long))
+
+        for attribute_mask, text_emb in zip(text_attribute_masks_neg, text_embeds_neg):
+            max_attribute_value=torch.max(attribute_mask).to(torch.int32)
+
+            for i in range(1,max_attribute_value+1):
+                mask=attribute_mask==i
+
+                averaged_attribute.append(text_emb[mask].mean(0))
+                labels.append(torch.zeros(1, dtype=torch.long))
+
+        averaged_attribute=torch.stack(averaged_attribute)
+        # averaged_attribute=F.normalize(averaged_attribute, dim=-1)
+        vl_avg_output=self.itm_head(averaged_attribute)
+        loss_pitm_avg=F.cross_entropy(vl_avg_output, torch.cat(labels, dim=0).to(image1.device))
+        loss_pitm=(loss_pitm+loss_pitm_avg)/2
+
+
+
         # Positive Relation Detection
         prd_output = self.prd_head(output_pos.last_hidden_state[:, 0, :])
         loss_prd = F.cross_entropy(prd_output, replace)
