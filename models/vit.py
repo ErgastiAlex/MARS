@@ -145,17 +145,56 @@ class VisionTransformer(nn.Module):
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
 
-    def forward(self, x, register_blk=-1):
+    def forward(self, x, register_blk=-1, mask_ratio=0.0):
         B = x.shape[0]
-        x = self.patch_embed(x)
+
+        x = self.patch_embed(x) # [B, N, C]
+            
+        x = x + self.pos_embed[:,1:x.size(1)+1,:]
+        if mask_ratio > 0.0:
+            x, mask, ids_restore = self.random_masking(x, mask_ratio)
+
+        # append after mask to avoid removing cls
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        cls_tokens = cls_tokens+ self.pos_embed[:,:1,:]
         x = torch.cat((cls_tokens, x), dim=1)
-        x = x + self.pos_embed[:,:x.size(1),:]
+        
         x = self.pos_drop(x)
         for i,blk in enumerate(self.blocks):
             x = blk(x, register_blk==i)
         x = self.norm(x)
+
+        if mask_ratio >0.0:
+            return x, mask, ids_restore
+    
         return x
+    
+    def random_masking(self, x, mask_ratio):
+        """
+        Perform per-sample random masking by per-sample shuffling.
+        Per-sample shuffling is done by argsort random noise.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape  # batch, length, dim
+        len_keep = int(L * (1 - mask_ratio))
+        
+        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+        
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D)) # positional embedding keep them order invariant
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        # unshuffle to get the binary mask
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
 
 def interpolate_pos_embed(pos_embed_checkpoint, visual_encoder):        
     # interpolate position embedding

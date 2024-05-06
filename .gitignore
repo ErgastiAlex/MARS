@@ -140,3 +140,7 @@ cython_debug/
 
 # IDEA
 .idea/
+*.txt
+output/
+*.sh
+*.pth

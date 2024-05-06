@@ -1,15 +1,15 @@
-train_file:  ['../dataset/CUHK-PEDES/processed_data/train.json']
-val_file: '../dataset/CUHK-PEDES/processed_data/val.json'
-test_file: '../dataset/CUHK-PEDES/processed_data/test.json'
-train_image_root: '../dataset/CUHK-PEDES/imgs'
-val_image_root: '../dataset/CUHK-PEDES/imgs'
-test_image_root: '../dataset/CUHK-PEDES/imgs'
+train_file:  ['/home/datasets/CUHK-PEDES/CUHK-PEDES/processed_data/train.json']
+val_file: '/home/datasets/CUHK-PEDES/CUHK-PEDES/processed_data/val.json'
+test_file: '/home/datasets/CUHK-PEDES/CUHK-PEDES/processed_data/test.json'
+train_image_root: '/home/datasets/CUHK-PEDES/CUHK-PEDES/imgs'
+val_image_root: '/home/datasets/CUHK-PEDES/CUHK-PEDES/imgs'
+test_image_root: '/home/datasets/CUHK-PEDES/CUHK-PEDES/imgs'
 
 bert_config: 'configs/config_bert.json'
 
 max_words: 50
 image_res: 384
-batch_size_train: 13
+batch_size_train: 8
 batch_size_test: 64
 
 mlm_probability: 0.15
@@ -28,11 +28,12 @@ warm_up: True
 optimizer: {opt: adamW, lr: 1e-5, weight_decay: 0.02, lr_custm: 1e-4}
 schedular: {sched: cosine, lr: 1e-5, epochs: 30, min_lr: 1e-6, decay_rate: 1, warmup_lr: 1e-5, warmup_epochs: 1, cooldown_epochs: 0}
 
-eval_epoch: 29
-
+eval_epoch: 0
+mask_ratio: 0.75
 weights:
   - 0.5
   - 1
   - 1
   - 0.5
   - 0.5
+  - 0
