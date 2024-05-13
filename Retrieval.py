@@ -46,8 +46,8 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         idx = idx.to(device, non_blocking=True)
         replace = replace.to(device, non_blocking=True)
 
-        text_input1 = tokenizer(text1, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
-        text_input2 = tokenizer(text2, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input1 = tokenizer(text1, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input2 = tokenizer(text2, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
         text_input1_t5 = tokenizer_t5(text1, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
         text_input2_t5 = tokenizer_t5(text2, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
 
@@ -80,7 +80,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
                             char_count+=len(text_words[idx_words])+1
                             idx_words+=1
                         pos.append(idx_words+1) # +1 to account for [CLS]
-                        
+                
                 if len(pos)>1 and adj_founded:
                     attribute_mask[pos]=count
                     count+=1
