@@ -295,7 +295,7 @@ class ALBEF(nn.Module):
         x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
         x = x + self.visual_decoder_pos_embed[:x.size(1)]
 
-        x = self.visual_decoder(x, text_embeds)
+        x = self.visual_decoder(x, text_output.last_hidden_state)
         # x = self.decoder_norm(x)
         x = self.decoder_pred(x)
 
