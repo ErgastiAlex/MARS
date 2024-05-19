@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from pathlib import Path
 import spacy
 
+import torchvision as tv
 import utils
 from dataset import create_dataset, create_sampler, create_loader
 from models.model_person_search import ALBEF
@@ -164,14 +165,17 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
     # extract image features
     image_feats = []
     image_embeds = []
+    images = []
     for image, img_id in data_loader:
         image = image.to(device)
+        images.append(image)
         image_feat = model.visual_encoder(image)
         image_embed = model.vision_proj(image_feat[:, 0, :])
         image_embed = F.normalize(image_embed, dim=-1)
         image_feats.append(image_feat.cpu())
         image_embeds.append(image_embed)
     image_feats = torch.cat(image_feats, dim=0)
+    images = torch.cat(images, dim=0)
     image_embeds = torch.cat(image_embeds, dim=0)
     # compute the feature similarity score for all image-text pairs
     sims_matrix = text_embeds @ image_embeds.t()
@@ -201,6 +205,14 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
                                          return_dict=True,
                                          mode='multi_modal'
                                          )
+    
+        txt2person = data_loader.dataset.txt2person[i]
+        img2person = np.array(data_loader.dataset.img2person)[topk_idx.cpu().numpy()]
+        tv.utils.save_image(torch.nn.functional.interpolate((images[topk_idx.cpu()]+1)/2,size=(384,128)), f"cross_maps/references.png")
+        sim = txt2person == img2person
+        print(texts[start + i])
+        print(sim)
+        exit()
         score = model.itm_head(output.last_hidden_state[:, 0, :])[:, 1]
         score_matrix_t2i[start + i, topk_idx] = score
     if args.distributed:

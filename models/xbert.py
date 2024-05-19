@@ -20,6 +20,7 @@ import os
 import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple
+import matplotlib.pyplot as plt
 
 import torch
 from torch import Tensor, device, dtype, nn
@@ -216,7 +217,7 @@ class BertEmbeddings(nn.Module):
 
 
 class BertSelfAttention(nn.Module):
-    def __init__(self, config, is_cross_attention):
+    def __init__(self, config, is_cross_attention, layer_num=0):
         super().__init__()
         self.config = config
         if config.hidden_size % config.num_attention_heads != 0 and not hasattr(config, "embedding_size"):
@@ -243,6 +244,8 @@ class BertSelfAttention(nn.Module):
             self.max_position_embeddings = config.max_position_embeddings
             self.distance_embedding = nn.Embedding(2 * config.max_position_embeddings - 1, self.attention_head_size)
         self.save_attention = False   
+
+        self.layer_num=layer_num
             
     def save_attn_gradients(self, attn_gradients):
         self.attn_gradients = attn_gradients
@@ -321,6 +324,32 @@ class BertSelfAttention(nn.Module):
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
+
+        if is_cross_attention and False:
+            # attention_probs is the CrossAttention Map 
+            # b h i j, i is the number of words, j # of patches
+            cross_maps = attention_probs[:,:,:,1:] #remove cls
+            cross_maps = cross_maps.mean(dim=1) # b i j
+            size = int(cross_maps.size(2)**0.5)
+            cross_maps = cross_maps.view(cross_maps.size(0), cross_maps.size(1), size, size) # 24 * 24
+            cross_maps = cross_maps.unsqueeze(-1) # b j p p 1
+            cross_maps = cross_maps.repeat(1, 1, 1, 1, 16*16) # b j p p 256
+            cross_maps = cross_maps.view(cross_maps.size(0), cross_maps.size(1), cross_maps.size(2), cross_maps.size(3), 16, 16)
+            cross_maps = cross_maps.permute(0,1,2,4,3,5).contiguous().view(cross_maps.size(0), cross_maps.size(1), size*16, size*16) # b i 384, 384
+            cross_maps = torch.nn.functional.interpolate(cross_maps, size=(384, 128))
+
+            for b in range(cross_maps.size(0)):
+                for i in range(cross_maps[b].size(0)):
+                    cross_map = cross_maps[b, i] # 384, 384
+                    cross_map = cross_map.detach().cpu().numpy()
+                    # save the cross attention map with colormap
+                    plt.imshow(cross_map, cmap='hot', interpolation='nearest')
+                    plt.tight_layout()
+                    plt.axis('off')
+                    os.makedirs('cross_maps', exist_ok=True)
+                    os.makedirs(f'./cross_maps/cross_attention_map_{b}', exist_ok=True)
+                    os.makedirs(f'./cross_maps/cross_attention_map_{b}/{self.layer_num}', exist_ok=True)
+                    plt.imsave(f'./cross_maps/cross_attention_map_{b}/{self.layer_num}/{i}.png', cross_map)
         
         if is_cross_attention and self.save_attention:
             self.save_attention_map(attention_probs)
@@ -361,9 +390,9 @@ class BertSelfOutput(nn.Module):
 
 
 class BertAttention(nn.Module):
-    def __init__(self, config, is_cross_attention=False):
+    def __init__(self, config, is_cross_attention=False, layer_num = 0):
         super().__init__()
-        self.self = BertSelfAttention(config, is_cross_attention)
+        self.self = BertSelfAttention(config, is_cross_attention, layer_num = layer_num)
         self.output = BertSelfOutput(config)
         self.pruned_heads = set()
 
@@ -446,11 +475,10 @@ class BertLayer(nn.Module):
         self.seq_len_dim = 1
         self.attention = BertAttention(config)
 
-        # Every layer has CA
         self.has_cross_attention = (layer_num >= config.fusion_layer) or True
         if self.has_cross_attention:           
             self.layer_num = layer_num                
-            self.crossattention = BertAttention(config, is_cross_attention=True)
+            self.crossattention = BertAttention(config, is_cross_attention=True, layer_num=layer_num)
         self.intermediate = BertIntermediate(config)
         self.output = BertOutput(config)
 
@@ -478,7 +506,6 @@ class BertLayer(nn.Module):
         outputs = self_attention_outputs[1:-1]
         present_key_value = self_attention_outputs[-1]
 
-        # cross-attention only if context is provided
         if self.has_cross_attention and encoder_hidden_states is not None:
             assert encoder_hidden_states is not None, "encoder_hidden_states must be given for cross-attention layers"
             
