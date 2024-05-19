@@ -12,7 +12,9 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from pathlib import Path
 import spacy
-
+#allow_tf32
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 import torchvision as tv
 import utils
 from dataset import create_dataset, create_sampler, create_loader
