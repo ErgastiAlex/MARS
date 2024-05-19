@@ -205,16 +205,21 @@ class ALBEF(nn.Module):
 
         # P-itm with attribute
         averaged_attribute=[]
-        labels=[]
 
+        loss_attribute = 0
+        count=0
         for attribute_mask, text_emb in zip(text2.attribute_masks, output_pos.last_hidden_state):
             max_attribute_value=torch.max(attribute_mask).to(torch.int32)
+            
 
             for i in range(1,max_attribute_value+1):
                 mask=attribute_mask==i
 
                 averaged_attribute.append(text_emb[mask].mean(0))
-                labels.append(torch.ones(1, dtype=torch.long))
+            
+            vl_avg_output=self.itm_head(torch.stack(averaged_attribute))
+            loss_attribute += F.cross_entropy(vl_avg_output, torch.ones(vl_avg_output.size(0), dtype=torch.long, device=image1.device))
+            count += 1
 
         for attribute_mask, text_emb in zip(text_attribute_masks_neg, output_neg_cross.last_hidden_state):
             max_attribute_value=torch.max(attribute_mask).to(torch.int32)
@@ -223,12 +228,16 @@ class ALBEF(nn.Module):
                 mask=attribute_mask==i
 
                 averaged_attribute.append(text_emb[mask].mean(0))
-                labels.append(torch.zeros(1, dtype=torch.long))
-
-        averaged_attribute=torch.stack(averaged_attribute)
-        # averaged_attribute=F.normalize(averaged_attribute, dim=-1)
-        vl_avg_output=self.itm_head(averaged_attribute)
-        loss_pitm_avg=F.cross_entropy(vl_avg_output, torch.cat(labels, dim=0).to(image1.device))
+            
+            vl_avg_output=self.itm_head(torch.stack(averaged_attribute))
+            loss_attribute += F.cross_entropy(vl_avg_output, torch.zeros(vl_avg_output.size(0), dtype=torch.long, device=image1.device))
+            count += 1
+        
+        loss_pitm_avg=loss_attribute/count
+        # averaged_attribute=torch.stack(averaged_attribute)
+        # # averaged_attribute=F.normalize(averaged_attribute, dim=-1)
+        # vl_avg_output=self.itm_head(averaged_attribute)
+        # loss_pitm_avg=F.cross_entropy(vl_avg_output, torch.cat(labels, dim=0).to(image1.device))
         loss_pitm=(loss_pitm+loss_pitm_avg)/2
 
 
