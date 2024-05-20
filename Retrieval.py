@@ -38,6 +38,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
     metric_logger.add_meter('loss_prd', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     metric_logger.add_meter('loss_mrtd', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     metric_logger.add_meter('loss_mae', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
+    metric_logger.add_meter('loss_attribute', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     header = 'Train Epoch: [{}]'.format(epoch)
     print_freq = 50
     step_size = 100
@@ -97,10 +98,10 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
             alpha = config['alpha']
         else:
             alpha = config['alpha'] * min(1.0, i / len(data_loader))
-        loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae = model(image1, image2, text_input1, text_input2, text_input1_t5, text_input2_t5,
+        loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae, loss_attribute = model(image1, image2, text_input1, text_input2, text_input1_t5, text_input2_t5,
                                                                   alpha=alpha, idx=idx, replace=replace)
         loss = 0.
-        for j, los in enumerate((loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae)):
+        for j, los in enumerate((loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae, loss_attribute)):
             loss += config['weights'][j] * los
         optimizer.zero_grad()
         loss.backward()
@@ -111,6 +112,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         metric_logger.update(loss_prd=loss_prd.item())
         metric_logger.update(loss_mrtd=loss_mrtd.item())
         metric_logger.update(loss_mae=loss_mae.item())
+        metric_logger.update(loss_attribute=loss_attribute.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         if epoch == 0 and i % step_size == 0 and i <= warmup_iterations:
             scheduler.step(i // step_size)
@@ -208,13 +210,13 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
                                          mode='multi_modal'
                                          )
     
-        txt2person = data_loader.dataset.txt2person[i]
-        img2person = np.array(data_loader.dataset.img2person)[topk_idx.cpu().numpy()]
-        tv.utils.save_image(torch.nn.functional.interpolate((images[topk_idx.cpu()]+1)/2,size=(384,128)), f"cross_maps/references.png")
-        sim = txt2person == img2person
-        print(texts[start + i])
-        print(sim)
-        exit()
+        # txt2person = data_loader.dataset.txt2person[i]
+        # img2person = np.array(data_loader.dataset.img2person)[topk_idx.cpu().numpy()]
+        # tv.utils.save_image(torch.nn.functional.interpolate((images[topk_idx.cpu()]+1)/2,size=(384,128)), f"cross_maps/references.png")
+        # # sim = txt2person == img2person
+        # # print(texts[start + i])
+        # # print(sim)
+        # # exit()
         score = model.itm_head(output.last_hidden_state[:, 0, :])[:, 1]
         score_matrix_t2i[start + i, topk_idx] = score
     if args.distributed:
