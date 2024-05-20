@@ -217,9 +217,10 @@ class ALBEF(nn.Module):
 
                 averaged_attribute.append(text_emb[mask].mean(0))
             
-            vl_avg_output=self.itm_head(torch.stack(averaged_attribute))
-            loss_attribute += F.cross_entropy(vl_avg_output, torch.ones(vl_avg_output.size(0), dtype=torch.long, device=image1.device))
-            count += 1
+            if len(averaged_attribute)>0:
+                vl_avg_output=self.itm_head(torch.stack(averaged_attribute))
+                loss_attribute += F.cross_entropy(vl_avg_output, torch.ones(vl_avg_output.size(0), dtype=torch.long, device=image1.device))
+                count += 1
 
         for attribute_mask, text_emb in zip(text_attribute_masks_neg, output_neg_cross.last_hidden_state):
             max_attribute_value=torch.max(attribute_mask).to(torch.int32)
@@ -229,16 +230,17 @@ class ALBEF(nn.Module):
 
                 averaged_attribute.append(text_emb[mask].mean(0))
             
-            vl_avg_output=self.itm_head(torch.stack(averaged_attribute))
-            loss_attribute += F.cross_entropy(vl_avg_output, torch.zeros(vl_avg_output.size(0), dtype=torch.long, device=image1.device))
-            count += 1
+            if len(averaged_attribute)>0:
+                vl_avg_output=self.itm_head(torch.stack(averaged_attribute))
+                loss_attribute += F.cross_entropy(vl_avg_output, torch.zeros(vl_avg_output.size(0), dtype=torch.long, device=image1.device))
+                count += 1
         
-        loss_pitm_avg=loss_attribute/count
+        loss_attribute=loss_attribute/count
         # averaged_attribute=torch.stack(averaged_attribute)
         # # averaged_attribute=F.normalize(averaged_attribute, dim=-1)
         # vl_avg_output=self.itm_head(averaged_attribute)
         # loss_pitm_avg=F.cross_entropy(vl_avg_output, torch.cat(labels, dim=0).to(image1.device))
-        loss_pitm=(loss_pitm+loss_pitm_avg)/2
+        loss_pitm=loss_pitm
 
 
 
@@ -312,7 +314,7 @@ class ALBEF(nn.Module):
 
         loss_mae = self.forward_loss(image1, x, mask)
 
-        return loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae
+        return loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae, loss_attribute
     
     def patchify(self, imgs):
         """
