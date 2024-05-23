@@ -27,7 +27,6 @@ from scheduler import create_scheduler
 
 
 def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config, tokenizer_t5):
-    nlp = spacy.load('en_core_web_sm')
     # train
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -57,37 +56,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
 
         attribute_masks=[]
         for text in text2:
-            doc = nlp(text)
-            attribute_mask = torch.zeros(text_input2.input_ids.size(1))
-
-            text_words=text.split()
-            idx_words=0
-            char_count=0
-
-            count=1
-            for chunk in doc.noun_chunks:
-                # adj = []
-                # noun = ""
-                pos=[]
-                adj_founded=False # just to be sure
-                for tok in chunk:
-                    if tok.pos_ == "NOUN":
-                        # noun = tok.text
-                        #manage she's to be split in she is
-                        while (char_count<=tok.idx and tok.idx<=char_count+len(text_words[idx_words]))==False:
-                            char_count+=len(text_words[idx_words])+1
-                            idx_words+=1
-                        pos.append(idx_words+1) # +1 to account for [CLS]
-                    if tok.pos_ == "ADJ":
-                        adj_founded=True
-                        while (char_count<=tok.idx and tok.idx<=char_count+len(text_words[idx_words]))==False:
-                            char_count+=len(text_words[idx_words])+1
-                            idx_words+=1
-                        pos.append(idx_words+1) # +1 to account for [CLS]
-                
-                if len(pos)>1 and adj_founded:
-                    attribute_mask[pos]=count
-                    count+=1
+            attribute_mask = get_attribute_mask(text_input2.input_ids.size(1), text)
             attribute_masks.append(attribute_mask)
 
         attribute_masks=torch.stack(attribute_masks)
@@ -120,6 +89,43 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger.global_avg())
     return {k: "{:.3f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}
+   
+
+nlp = spacy.load('en_core_web_sm')
+
+def get_attribute_mask(size, text):
+    doc = nlp(text)
+    attribute_mask = torch.zeros(size)
+
+    text_words=text.split()
+    idx_words=0
+    char_count=0
+
+    count=1
+    for chunk in doc.noun_chunks:
+                # adj = []
+                # noun = ""
+        pos=[]
+        adj_founded=False # just to be sure
+        for tok in chunk:
+            if tok.pos_ == "NOUN":
+                        # noun = tok.text
+                        #manage she's to be split in she is
+                while (char_count<=tok.idx and tok.idx<=char_count+len(text_words[idx_words]))==False:
+                    char_count+=len(text_words[idx_words])+1
+                    idx_words+=1
+                pos.append(idx_words+1) # +1 to account for [CLS]
+            if tok.pos_ == "ADJ":
+                adj_founded=True
+                while (char_count<=tok.idx and tok.idx<=char_count+len(text_words[idx_words]))==False:
+                    char_count+=len(text_words[idx_words])+1
+                    idx_words+=1
+                pos.append(idx_words+1) # +1 to account for [CLS]
+                
+        if len(pos)>1 and adj_founded:
+            attribute_mask[pos]=count
+            count+=1
+    return attribute_mask
 
 @torch.no_grad()
 def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
@@ -140,24 +146,20 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
     text_embeds = []
     text_atts = []
     
+
     for i in range(0, num_text, text_bs):
         text = texts[i: min(num_text, i + text_bs)]
-        text_input = tokenizer(text, padding='max_length', truncation=True, max_length=config['max_words'], return_tensors="pt").to(device)
-        text_input_t5 = tokenizer_t5(text, padding='max_length', truncation=True, max_length=config['max_words'], return_tensors="pt").to(device)
+        text_input = tokenizer(text, padding='max_length', max_length=70, return_tensors="pt").to(device)
 
         text_inputs_ids.append(text_input.input_ids) # new version
         text_atts_new_version.append(text_input.attention_mask) 
 
         text_output = model.text_encoder.bert(text_input.input_ids, attention_mask=text_input.attention_mask, mode='text')
-        text_output_t5 = model.t5.encoder(input_ids=text_input_t5.input_ids).last_hidden_state
-        text_output_t5 = model.t5_proj(text_output_t5)
-
         text_feat = text_output.last_hidden_state
-        text_feat = torch.cat([text_feat,text_output_t5], dim=1)
         text_embed = F.normalize(model.text_proj(text_feat[:, 0, :]))
         text_embeds.append(text_embed)
         text_feats.append(text_feat)
-        text_atts.append(torch.cat([text_input.attention_mask, text_input_t5.attention_mask], dim=1))
+        text_atts.append(torch.cat([text_input.attention_mask], dim=1))
 
     text_embeds = torch.cat(text_embeds, dim=0)
     text_feats = torch.cat(text_feats, dim=0)
@@ -217,7 +219,62 @@ def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
         # # print(texts[start + i])
         # # print(sim)
         # # exit()
-        score = model.itm_head(output.last_hidden_state[:, 0, :])[:, 1]
+        score = model.itm_head(output.last_hidden_state[:, 0, :])[:, 1] # 128
+
+        # score_sort_indexes = torch.argsort(score, descending=True)
+        # score_unsort_indexes = torch.argsort(score_sort_indexes)
+
+
+
+        # hidden_top32 = output.last_hidden_state[score_sort_indexes[:32]]
+
+        # # #new reranking
+        # text = texts[start + i]
+        # attribute_masks = get_attribute_mask(text_inputs_ids[start + i].size(0), text).unsqueeze(0).repeat(config["k_test"],1)
+        # batch_attributes = []
+        # max_attribute_value=torch.max(attribute_masks).to(torch.int32)
+        # if max_attribute_value>0:
+
+        #     for attribute_mask, text_emb in zip(attribute_masks, output.last_hidden_state):
+
+        #         averaged_attribute = []
+        #         for i in range(1,max_attribute_value+1):
+        #             mask=attribute_mask==i 
+
+        #             averaged_attribute.append(text_emb[mask].mean(0)) 
+
+        #         batch_attributes.append(torch.stack(averaged_attribute)) # [num_attributes, hidden_size]
+
+
+        #     batch_attributes = torch.stack(batch_attributes) # [32, num_attributes, hidden_size] 
+
+        # #     points = torch.Tensor([1, 0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.2, 0.1, 0.05]).unsqueeze(1).to(device)
+        # #     points = points.repeat(1,batch_attributes.size(1)) #[10, num_attributes]
+
+        #     scores_attributes = model.itm_head(batch_attributes)[:, :, 1] # [k, num_attributes]
+        #     scores_attributes = scores_attributes.mean(1) # [k]
+        #     score = torch.cat([score.unsqueeze(1), scores_attributes.unsqueeze(1)], dim=1) # [128,2]
+        #     score = score.mean(1) # 128
+
+        # #     #sort along batch
+        # #     score_attributes_sort_indexes = torch.argsort(scores_attributes, descending=True, dim=0)
+        # #     score_attributes_unsort_indexes = torch.argsort(scores_attributes, dim=0)
+
+        # #     # assing to the top 10 attributes the points
+
+        # #     scores_attributes_sorted = torch.gather(scores_attributes, dim = 0, index = score_attributes_sort_indexes) # [32, num_attributes]
+
+        # #     scores_attributes_sorted[:10] = points
+        # #     scores_attributes_sorted[10:] = 0
+        # #     scores_attributes = torch.gather(scores_attributes_sorted, dim = 0, index = score_attributes_unsort_indexes) # [32, num_attributes]
+
+        # #     scores_attributes = scores_attributes.sum(1) # 32
+
+        # #     score = torch.gather(score, dim=0, index=score_sort_indexes)
+        # #     score[:32] = scores_attributes
+        # #     score[32:] = 0
+        # #     score = torch.gather(score, dim=0, index=score_unsort_indexes)
+
         score_matrix_t2i[start + i, topk_idx] = score
     if args.distributed:
         dist.barrier()
