@@ -147,3 +147,4 @@ output/
 *.sh
 *.pth
 all-cross-maps/
+cross_maps*/
