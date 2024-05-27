@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from torch import nn
 from models.vit import VisionTransformer
 from models.xbert import BertConfig, BertForMaskedLM
-from transformers import T5Tokenizer, T5ForConditionalGeneration
 from models.cross_transformer import CrossTransformer
 
 class ALBEF(nn.Module):
@@ -32,8 +31,6 @@ class ALBEF(nn.Module):
         self.mask_token = nn.Parameter(torch.randn(1, 1, 768))
         
         self.text_encoder = BertForMaskedLM.from_pretrained(text_encoder, config=bert_config)
-        self.t5 = T5ForConditionalGeneration.from_pretrained("google-t5/t5-small")
-        self.t5_proj = nn.Linear(512, 768)
         self.text_width = self.text_encoder.config.hidden_size
         self.vision_proj = nn.Linear(vision_width, embed_dim)
         self.text_proj = nn.Linear(self.text_width, embed_dim)
@@ -51,14 +48,11 @@ class ALBEF(nn.Module):
             mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), )
         self.vision_proj_m = nn.Linear(vision_width, embed_dim)
         self.text_encoder_m = BertForMaskedLM.from_pretrained(text_encoder, config=bert_config)
-        self.t5_m = T5ForConditionalGeneration.from_pretrained("google-t5/t5-small")
-        self.t5_proj_m = nn.Linear(512, 768)
         self.text_proj_m = nn.Linear(self.text_width, embed_dim)
         self.model_pairs = [[self.visual_encoder, self.visual_encoder_m],
                             [self.vision_proj, self.vision_proj_m],
                             [self.text_encoder, self.text_encoder_m],
                             [self.text_proj, self.text_proj_m],
-                            [self.t5, self.t5_m],
                             ]
         self.copy_params()
         # create the queue
@@ -72,7 +66,7 @@ class ALBEF(nn.Module):
 
         self.mask_ratio = config["mask_ratio"]
 
-    def forward(self, image1, image2, text1, text2, text1_t5, text2_t5, alpha, idx, replace):
+    def forward(self, image1, image2, text1, text2, alpha, idx, replace):
         # extract image features
         image_embeds = self.visual_encoder(image1)
         N, L, D = image_embeds.size()
@@ -83,13 +77,8 @@ class ALBEF(nn.Module):
         text_output = self.text_encoder.bert(text2.input_ids, attention_mask=text2.attention_mask,
                                              return_dict=True, mode='text')
         
-        text_output_t5 = self.t5.encoder(input_ids=text2_t5.input_ids).last_hidden_state
-        text_output_t5 = self.t5_proj(text_output_t5)
+        text_feat = F.normalize(self.text_proj(text_output.last_hidden_state[:, 0, :]), dim=-1)
 
-        text_embeds = torch.cat([text_output.last_hidden_state, text_output_t5], dim = 1)
-        text_feat = F.normalize(self.text_proj(text_embeds[:, 0, :]), dim=-1)
-
-        text_attention_mask = torch.cat([text2.attention_mask, text2_t5.attention_mask], dim = 1)
         # Contrastive loss
         idx = idx.view(-1, 1)
         idx_all = torch.cat([idx.t(), self.idx_queue.clone().detach()], dim=1)

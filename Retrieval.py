@@ -20,13 +20,12 @@ import utils
 from dataset import create_dataset, create_sampler, create_loader
 from models.model_person_search import ALBEF
 from models.tokenization_bert import BertTokenizer
-from transformers import T5Tokenizer
 from models.vit import interpolate_pos_embed
 from optim import create_optimizer
 from scheduler import create_scheduler
 
 
-def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config, tokenizer_t5):
+def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config):
     # train
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -51,8 +50,6 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
 
         text_input1 = tokenizer(text1, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
         text_input2 = tokenizer(text2, padding='longest', max_length=config['max_words'], return_tensors="pt").to(device)
-        text_input1_t5 = tokenizer_t5(text1, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
-        text_input2_t5 = tokenizer_t5(text2, truncation=True, padding='max_length', max_length=config['max_words'], return_tensors="pt").to(device)
 
         attribute_masks=[]
         for text in text2:
@@ -67,7 +64,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
             alpha = config['alpha']
         else:
             alpha = config['alpha'] * min(1.0, i / len(data_loader))
-        loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae, loss_attribute = model(image1, image2, text_input1, text_input2, text_input1_t5, text_input2_t5,
+        loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae, loss_attribute = model(image1, image2, text_input1, text_input2,
                                                                   alpha=alpha, idx=idx, replace=replace)
         loss = 0.
         for j, los in enumerate((loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd, loss_mae, loss_attribute)):
@@ -128,7 +125,7 @@ def get_attribute_mask(size, text):
     return attribute_mask
 
 @torch.no_grad()
-def evaluation(model, data_loader, tokenizer, tokenizer_t5, device, config):
+def evaluation(model, data_loader, tokenizer, device, config):
     # evaluate
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -355,7 +352,6 @@ def main(args, config):
                                                           collate_fns=[None, None, None])
     print(args.text_encoder)
     tokenizer = BertTokenizer.from_pretrained(args.text_encoder)
-    tokenizer_t5 = T5Tokenizer.from_pretrained("google-t5/t5-small")
 
 
     start_epoch = 0
@@ -409,9 +405,9 @@ def main(args, config):
             if args.distributed:
                 train_loader.sampler.set_epoch(epoch)
             train_stats = train(model, train_loader, optimizer, tokenizer, epoch, warmup_steps, device, lr_scheduler,
-                                config, tokenizer_t5)
+                                config)
         if epoch >= config['eval_epoch'] or args.evaluate:
-            score_test_t2i = evaluation(model_without_ddp, test_loader, tokenizer, tokenizer_t5, device, config)
+            score_test_t2i = evaluation(model_without_ddp, test_loader, tokenizer, device, config)
             if utils.is_main_process():
                 test_result = itm_eval(score_test_t2i, test_dataset.img2person, test_dataset.txt2person, args.eval_mAP)
                 print('Test:', test_result, '\n')
