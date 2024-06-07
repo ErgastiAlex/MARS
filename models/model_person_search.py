@@ -40,6 +40,7 @@ class ALBEF(nn.Module):
         self.queue_size = config['queue_size']
         self.momentum = config['momentum']
         self.itm_head = nn.Linear(self.text_width, 2)
+        # self.itm_head_attr = nn.Linear(self.text_width, 2)
         self.prd_head = nn.Linear(self.text_width, 2)
         self.mrtd_head = nn.Linear(self.text_width, 2)
         # create momentum models
@@ -175,14 +176,15 @@ class ALBEF(nn.Module):
                                dim=0).to(image1.device)
         loss_pitm = F.cross_entropy(vl_output, itm_labels)
 
-        # P-itm with attribute
-        averaged_attribute=[]
+
 
         loss_attribute = 0
         count=0
         for attribute_mask, text_emb in zip(text2.attribute_masks, output_pos.last_hidden_state):
             max_attribute_value=torch.max(attribute_mask).to(torch.int32)
             
+            # P-itm with attribute
+            averaged_attribute=[]
 
             for i in range(1,max_attribute_value+1):
                 mask=attribute_mask==i
@@ -196,6 +198,10 @@ class ALBEF(nn.Module):
 
         for attribute_mask, text_emb in zip(text_attribute_masks_neg, output_neg_cross.last_hidden_state):
             max_attribute_value=torch.max(attribute_mask).to(torch.int32)
+
+            # P-itm with attribute
+            averaged_attribute=[]
+
 
             for i in range(1,max_attribute_value+1):
                 mask=attribute_mask==i
