@@ -148,7 +148,7 @@ def evaluation(model, data_loader, tokenizer, device, config):
 
     for i in range(0, num_text, text_bs):
         text = texts[i: min(num_text, i + text_bs)]
-        text_input = tokenizer(text, padding='max_length', max_length=config["max_words"], return_tensors="pt").to(device)
+        text_input = tokenizer(text, padding='max_length', truncation = True,  max_length=config["max_words"], return_tensors="pt").to(device)
 
         text_inputs_ids.append(text_input.input_ids) # new version
         text_atts_new_version.append(text_input.attention_mask) 
