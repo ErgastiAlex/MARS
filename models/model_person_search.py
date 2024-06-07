@@ -123,15 +123,6 @@ class ALBEF(nn.Module):
         # Probabilistic Image-Text Matching
         # forward the positve image-text pairs
 
-        # Use the entire bert with CA for Reranking
-        # output_pos = self.text_encoder.bert(encoder_embeds=text_embeds,
-        #                                     attention_mask=text_attention_mask,
-        #                                     encoder_hidden_states=image_embeds,
-        #                                     encoder_attention_mask=image_atts,
-        #                                     return_dict=True,
-        #                                     mode='fusion',
-        #                                     )
-
         output_pos = self.text_encoder.bert(text2.input_ids,
                                             attention_mask=text2.attention_mask,
                                             encoder_hidden_states=image_embeds,
@@ -169,14 +160,6 @@ class ALBEF(nn.Module):
         image_embeds_all = torch.cat([image_embeds_neg, image_embeds], dim=0)
         image_atts_all = torch.cat([image_atts, image_atts], dim=0)
         
-        # old version
-        # output_neg_cross = self.text_encoder.bert(encoder_embeds=text_embeds_all,
-        #                                           attention_mask=text_atts_all,
-        #                                           encoder_hidden_states=image_embeds_all,
-        #                                           encoder_attention_mask=image_atts_all,
-        #                                           return_dict=True,
-        #                                           mode='fusion',
-        #                                           )
         output_neg_cross = self.text_encoder.bert(text_inputs_ids_all,
                                             attention_mask=text_atts_all,
                                             encoder_hidden_states=image_embeds_all,
@@ -225,13 +208,8 @@ class ALBEF(nn.Module):
                 count += 1
         
         loss_attribute=loss_attribute/count
-        # averaged_attribute=torch.stack(averaged_attribute)
-        # # averaged_attribute=F.normalize(averaged_attribute, dim=-1)
-        # vl_avg_output=self.itm_head(averaged_attribute)
-        # loss_pitm_avg=F.cross_entropy(vl_avg_output, torch.cat(labels, dim=0).to(image1.device))
+
         loss_pitm=loss_pitm
-
-
 
         # Positive Relation Detection
         prd_output = self.prd_head(output_pos.last_hidden_state[:, 0, :])

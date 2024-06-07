@@ -18,5 +18,5 @@
   "vocab_size": 30522,
   "fusion_layer": 6,
   "encoder_width": 768,
-  "full_ca": false
+  "full_ca": true
 }

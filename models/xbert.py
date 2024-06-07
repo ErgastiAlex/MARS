@@ -475,7 +475,7 @@ class BertLayer(nn.Module):
         self.seq_len_dim = 1
         self.attention = BertAttention(config)
 
-        self.has_cross_attention = (layer_num >= config.fusion_layer) or True
+        self.has_cross_attention = (layer_num >= config.fusion_layer) or config.full_ca
         if self.has_cross_attention:           
             self.layer_num = layer_num                
             self.crossattention = BertAttention(config, is_cross_attention=True, layer_num=layer_num)
