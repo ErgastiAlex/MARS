@@ -94,7 +94,6 @@ def get_attribute_mask(text_ids, tokenizer):
     size = text_ids.size(0)
     text = " ".join([tokenizer.decode([token_id]) for token_id in text_ids[1:]])
 
-
     doc = nlp(text)
     attribute_mask = torch.zeros(size)
     text_words=text.split()
@@ -170,17 +169,15 @@ def evaluation(model, data_loader, tokenizer, device, config):
     # extract image features
     image_feats = []
     image_embeds = []
-    images = []
     for image, img_id in data_loader:
         image = image.to(device)
-        images.append(image)
         image_feat = model.visual_encoder(image)
         image_embed = model.vision_proj(image_feat[:, 0, :])
         image_embed = F.normalize(image_embed, dim=-1)
         image_feats.append(image_feat.cpu())
         image_embeds.append(image_embed)
+        
     image_feats = torch.cat(image_feats, dim=0)
-    images = torch.cat(images, dim=0)
     image_embeds = torch.cat(image_embeds, dim=0)
     # compute the feature similarity score for all image-text pairs
     sims_matrix = text_embeds @ image_embeds.t()
@@ -246,7 +243,7 @@ def itm_eval(scores_t2i, img2person, txt2person, eval_mAP):
                        'r5': ir5,
                        'r10': ir10,
                        'r_mean': ir_mean,
-                       'mAP': mAP.item()
+                       'mAP': mAP.item(),
                        }
     else:
         eval_result = {'r1': ir1,
@@ -254,6 +251,7 @@ def itm_eval(scores_t2i, img2person, txt2person, eval_mAP):
                        'r10': ir10,
                        'r_mean': ir_mean,
                        }
+    
     return eval_result
 
 def main(args, config):

@@ -5,6 +5,6 @@ python -m torch.distributed.launch --nproc_per_node=4 --use_env --rdzv_endpoint=
 Retrieval.py \
 --config configs/PS_cuhk_pedes.yaml \
 --output_dir output/cuhk-pedes/evaluation \
---checkpoint ../rasa_checkpoint/rasa_cuhk_checkpoint.pth \
+--checkpoint ../MARS_checkpoint/MARS_cuhk_checkpoint.pth \
 --eval_mAP \
 --evaluate

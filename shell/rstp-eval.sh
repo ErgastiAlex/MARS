@@ -5,6 +5,6 @@ python -m torch.distributed.run --nproc_per_node=4 --rdzv_endpoint=127.0.0.1:295
 Retrieval.py \
 --config configs/PS_rstp_reid.yaml \
 --output_dir output/rstp-reid/evaluation/ \
---checkpoint ../rasa_checkpoint/rasa_rstp_checkpoint.pth \
+--checkpoint ../MARS_checkpoint/MARS_rstp_checkpoint.pth \
 --eval_mAP \
 --evaluate

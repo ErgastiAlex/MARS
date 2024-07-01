@@ -5,5 +5,5 @@ python -m torch.distributed.run --nproc_per_node=4 --rdzv_endpoint=127.0.0.1:295
 Retrieval.py \
 --config configs/PS_rstp_reid.yaml \
 --output_dir output/rstp-reid/train \
---checkpoint /data1/byyoung/data/ALBEF/ALBEF.pth \
+--checkpoint /data/ALBEF/ALBEF.pth \
 --eval_mAP
