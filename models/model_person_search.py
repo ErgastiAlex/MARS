@@ -145,18 +145,14 @@ class ALBEF(nn.Module):
         # select a negative text for each image
         text_neg_idx = torch.multinomial(weights_i2t, 1).flatten()
 
-        # text_embeds_neg = text_embeds[text_neg_idx] # old version
         text_inputs_ids_neg = text2.input_ids[text_neg_idx]
 
-        # text_atts_neg = text_attention_mask[text_neg_idx] # old version
         text_atts_neg = text2.attention_mask[text_neg_idx]
         
         # forward the negative image-text pairs
-        # text_embeds_all = torch.cat([text_embeds, text_embeds_neg], dim=0) # old version
         text_inputs_ids_all = torch.cat([text2.input_ids, text_inputs_ids_neg], dim=0)
         text_attribute_masks_neg=torch.cat([text2.attribute_masks, text2.attribute_masks[text_neg_idx]], dim=0)
         
-        # text_atts_all = torch.cat([text_attention_mask, text_atts_neg], dim=0) # old version
         text_atts_all = torch.cat([text2.attention_mask, text_atts_neg], dim=0)
         image_embeds_all = torch.cat([image_embeds_neg, image_embeds], dim=0)
         image_atts_all = torch.cat([image_atts, image_atts], dim=0)
@@ -280,7 +276,6 @@ class ALBEF(nn.Module):
         x = x + self.visual_decoder_pos_embed[:x.size(1)]
 
         x = self.visual_decoder(x, text_output.last_hidden_state)
-        # x = self.decoder_norm(x)
         x = self.decoder_pred(x)
 
         x = x[:,1:,:]
@@ -310,10 +305,6 @@ class ALBEF(nn.Module):
         mask: [N, L], 0 is keep, 1 is remove, 
         """
         target = self.patchify(imgs)
-        # if self.norm_pix_loss:
-        #     mean = target.mean(dim=-1, keepdim=True)
-        #     var = target.var(dim=-1, keepdim=True)
-        #     target = (target - mean) / (var + 1.e-6)**.5
 
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
