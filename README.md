@@ -124,5 +124,13 @@ The implementation of MARS relies on resources from [RaSA](https://github.com/Fl
 If you find this code useful for your research, please cite our paper.
 
 ```tex
-
+@misc{ergasti2024marspayingattentionvisual,
+      title={MARS: Paying more attention to visual attributes for text-based person search}, 
+      author={Alex Ergasti and Tomaso Fontanini and Claudio Ferrari and Massimo Bertozzi and Andrea Prati},
+      year={2024},
+      eprint={2407.04287},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2407.04287}, 
+}
 ```
