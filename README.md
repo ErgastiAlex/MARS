@@ -6,11 +6,20 @@ This repository supports training and evaluation on three text-based person sear
 ![](images/architecture.png)
 
 ## Usage
-### Requirements
-- pytorch 1.9.1
-- torchvision 0.10.1
-- transformers 4.8.1
-- timm 0.4.9
+### Enviroment preparation
+```bash
+conda create -n MARS python==3.9
+conda activate MARS
+
+pip3 install torch torchvision torchaudio
+pip install transformers==4.8.1
+pip install timm==0.4.9
+pip install spacy
+python -m spacy download en
+pip install einops
+conda install anaconda::ruamel_yaml
+pip install matplotlib
+```
 
 ### Prepare Datasets
 
