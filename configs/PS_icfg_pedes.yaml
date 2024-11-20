@@ -7,7 +7,7 @@ eval_epoch: 0
 image_res: 384
 k_test: 128
 mask_ratio: 0.75
-max_words: 70
+max_words: 75
 mlm_probability: 0.15
 momentum: 0.995
 mrtd_mask_probability: 0.3
