@@ -1,4 +1,4 @@
-# MARS: Paying more attention to visual attributes for text-based person search
+# MARS: Paying more attention to visual attributes for text-based person search (ACM TOMM)
 
 This is the official PyTorch implementation of the paper [MARS: Paying more attention to visual attributes for text-based person search](). 
 This repository supports training and evaluation on three text-based person search benchmarks: CUHK-PEDES, ICFG-PEDES and RSTPReid.
