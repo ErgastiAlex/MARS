@@ -1,6 +1,6 @@
 # MARS: Paying more attention to visual attributes for text-based person search (ACM TOMM)
 
-This is the official PyTorch implementation of the paper [MARS: Paying more attention to visual attributes for text-based person search](). 
+This is the official PyTorch implementation of the paper [MARS: Paying more attention to visual attributes for text-based person search](https://dl.acm.org/doi/10.1145/3721482). 
 This repository supports training and evaluation on three text-based person search benchmarks: CUHK-PEDES, ICFG-PEDES and RSTPReid.
 
 ![](images/architecture.png)
@@ -133,13 +133,19 @@ The implementation of MARS relies on resources from [RaSA](https://github.com/Fl
 If you find this code useful for your research, please cite our paper.
 
 ```tex
-@misc{ergasti2024marspayingattentionvisual,
-      title={MARS: Paying more attention to visual attributes for text-based person search}, 
-      author={Alex Ergasti and Tomaso Fontanini and Claudio Ferrari and Massimo Bertozzi and Andrea Prati},
-      year={2024},
-      eprint={2407.04287},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2407.04287}, 
+@article{10.1145/3721482,
+author = {Ergasti, Alex and Fontanini, Tomaso and Ferrari, Claudio and Bertozzi, Massimo and Prati, Andrea},
+title = {Mars: Paying More Attention to Visual Attributes for Text-based Person Search},
+year = {2025},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+issn = {1551-6857},
+url = {https://doi.org/10.1145/3721482},
+doi = {10.1145/3721482},
+abstract = {Text-based person search (TBPS) is a problem that gained significant interest within the research community. The task is that of retrieving one or more images of a specific individual based on a textual description. The multi-modal nature of the task requires learning representations that bridge text and image data within a shared latent space. Existing TBPS systems face two major challenges. One is defined as inter-identity noise that is due to the inherent vagueness and imprecision of text descriptions and it indicates how descriptions of visual attributes can be generally associated to different people; the other is the intra-identity variations, which are all those nuisances e.g., pose, illumination, that can alter the visual appearance of the same textual attributes for a given subject. To address these issues, this paper presents a novel TBPS architecture named MARS (Mae-Attribute-Relation-Sensitive), which enhances current state-of-the-art models by introducing two key components: a Visual Reconstruction Loss and an Attribute Loss. The former employs a Masked AutoEncoder trained to reconstruct randomly masked image patches with the aid of the textual description. In doing so the model is encouraged to learn more expressive representations and textual-visual relations in the latent space. The Attribute Loss, instead, balances the contribution of different types of attributes, defined as adjective-noun chunks of text. This loss ensures that every attribute is taken into consideration in the person retrieval process. Extensive experiments on three commonly used datasets, namely CUHK-PEDES, ICFG-PEDES, and RSTPReid, report performance improvements, with significant gains in the mean Average Precision (mAP) metric w.r.t. the current state of the art. Code will be available at .},
+note = {Just Accepted},
+journal = {ACM Trans. Multimedia Comput. Commun. Appl.},
+month = mar,
+keywords = {Multi-modal learning, person retrieval, re-identification}
 }
 ```
