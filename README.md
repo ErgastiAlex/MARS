@@ -1,5 +1,9 @@
 # MARS: Paying more attention to visual attributes for text-based person search (ACM TOMM)
 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mars-paying-more-attention-to-visual/nlp-based-person-retrival-on-cuhk-pedes)](https://paperswithcode.com/sota/nlp-based-person-retrival-on-cuhk-pedes?p=mars-paying-more-attention-to-visual)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mars-paying-more-attention-to-visual/text-based-person-retrieval-on-rstpreid-1)](https://paperswithcode.com/sota/text-based-person-retrieval-on-rstpreid-1?p=mars-paying-more-attention-to-visual)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mars-paying-more-attention-to-visual/text-based-person-retrieval-on-icfg-pedes)](https://paperswithcode.com/sota/text-based-person-retrieval-on-icfg-pedes?p=mars-paying-more-attention-to-visual)
+
 This is the official PyTorch implementation of the paper [MARS: Paying more attention to visual attributes for text-based person search](https://dl.acm.org/doi/10.1145/3721482). 
 This repository supports training and evaluation on three text-based person search benchmarks: CUHK-PEDES, ICFG-PEDES and RSTPReid.
 
